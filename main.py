@@ -10,6 +10,7 @@ from src.get_data import get_crypto_data
 import pandas as pd
 import mplfinance as mpf
 import matplotlib.dates as mdates
+import numpy as np
 
 class CryptoApp:
     def __init__(self, window):
@@ -62,7 +63,7 @@ class CryptoApp:
 
         self.period_var = tk.StringVar()
         self.period_entry = ttk.Combobox(self.option_frame, textvariable=self.period_var)
-        self.period_entry['values'] = ["Rok", "Miesiąc", "Tydzień", "Dzień"]
+        self.period_entry['values'] = ["Rok", "Pół Roku", "Miesiąc", "Dwa Tygodnie", "Tydzień", "Trzy Dni", "Dzień", "12h", "6h", "30min", "15min"]
         self.period_entry.current(0)
         self.period_entry.grid(row=1, column=0, padx=15, pady=10, sticky="nsew")
         self.period_entry.bind("<<ComboboxSelected>>", self.update_chart)
@@ -80,6 +81,22 @@ class CryptoApp:
         self.chart_type_line.invoke()  # Set default to line chart
         self.chart_type_var.trace_add('write', self.update_chart)
 
+        self.fib_var = tk.BooleanVar()
+        self.fib_check = ttk.Checkbutton(self.option_frame, text="Rysuj Fibonacci", variable=self.fib_var, command=self.update_chart)
+        self.fib_check.grid(row=5, column=0, padx=15, pady=5, sticky="nsew")
+
+        self.zigzag_var = tk.BooleanVar()
+        self.zigzag_check = ttk.Checkbutton(self.option_frame, text="Rysuj ZigZag", variable=self.zigzag_var, command=self.update_chart)
+        self.zigzag_check.grid(row=6, column=0, padx=15, pady=5, sticky="nsew")
+
+        self.lwma_var = tk.BooleanVar()
+        self.lwma_check = ttk.Checkbutton(self.option_frame, text="Rysuj LWMA", variable=self.lwma_var, command=self.update_chart)
+        self.lwma_check.grid(row=7, column=0, padx=15, pady=5, sticky="nsew")
+
+        self.volume_var = tk.BooleanVar()
+        self.volume_check = ttk.Checkbutton(self.option_frame, text="Pokaż wolumen", variable=self.volume_var, command=self.update_chart)
+        self.volume_check.grid(row=8, column=0, padx=15, pady=5, sticky="nsew")
+
         self.frame2 = ttk.Frame(self.window, height=self.window.winfo_height(), style="Green.TFrame")
         self.frame2.grid(row=0, column=1, sticky=tk.NSEW)
         self.frame2.grid_columnconfigure(0, weight=1)
@@ -87,9 +104,13 @@ class CryptoApp:
         self.frame_chart = ttk.Frame(self.frame2, style="TNotebook", padding=10)
         self.frame_chart.grid(row=0, column=0, sticky=tk.NSEW)
         self.frame_chart.grid_propagate(False)
-        self.frame2.grid_rowconfigure(1, weight=2)
+        self.frame2.grid_rowconfigure(1, weight=1)
+        self.frame_volume = ttk.Frame(self.frame2, style="TNotebook", padding=10)
+        self.frame_volume.grid(row=1, column=0, sticky=tk.NSEW)
+        self.frame_volume.grid_propagate(False)
+        self.frame2.grid_rowconfigure(2, weight=2)
         self.frame_analise = ttk.Frame(self.frame2, style="TNotebook", padding=10)
-        self.frame_analise.grid(row=1, column=0, sticky=tk.NSEW)
+        self.frame_analise.grid(row=2, column=0, sticky=tk.NSEW)
         self.frame_analise.grid_propagate(False)
 
         self.load_data()
@@ -118,64 +139,156 @@ class CryptoApp:
         end_date = datetime.now().replace(tzinfo=None)
         if period == "Rok":
             start_date = end_date - timedelta(days=365)
+        elif period == "Pół Roku":
+            start_date = end_date - timedelta(days=182)
         elif period == "Miesiąc":
             start_date = end_date - timedelta(days=30)
+        elif period == "Dwa Tygodnie":
+            start_date = end_date - timedelta(days=14)
         elif period == "Tydzień":
             start_date = end_date - timedelta(days=7)
+        elif period == "Trzy Dni":
+            start_date = end_date - timedelta(days=3)
         elif period == "Dzień":
             start_date = end_date - timedelta(days=1)
-        self.current_display_data = data[data['timestamp'] >= start_date]
+        elif period == "12h":
+            start_date = end_date - timedelta(hours=12)
+        elif period == "6h":
+            start_date = end_date - timedelta(hours=6)
+        elif period == "30min":
+            start_date = end_date - timedelta(minutes=30)
+        elif period == "15min":
+            start_date = end_date - timedelta(minutes=15)
+        else:
+            start_date = end_date - timedelta(days=365)
+        data = data[data['timestamp'] >= start_date]
+        self.current_display_data = data
 
-        self.plot_crypto_data(self.current_display_data)
+        # Clear previous charts
+        for widget in self.frame_chart.winfo_children():
+            widget.destroy()
+        for widget in self.frame_volume.winfo_children():
+            widget.destroy()
+        for widget in self.frame_analise.winfo_children():
+            widget.destroy()
 
-    def plot_crypto_data(self, data):
-        for child in self.frame_chart.winfo_children():
-            child.destroy()
+        self.draw_chart()
+        if self.volume_var.get():
+            self.draw_volume()
+        self.display_analyse(data)
 
-        container_frame = ttk.Frame(self.frame_chart)
-        container_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+    def draw_chart(self):
+        plt.close('all')  # Zamknij wszystkie otwarte figury
 
-        fig, ax = plt.subplots()
+        data = self.current_display_data
+
+        fig, ax = plt.subplots(figsize=(12, 6))
         fig.patch.set_facecolor('#313131')
-        fig.patch.set_alpha(1.0)
-        ax.patch.set_facecolor('#313131')
-        ax.patch.set_alpha(0.2)
-
-        for text in ax.get_xticklabels() + ax.get_yticklabels():
-            text.set_color('white')
-
-        ax.xaxis.label.set_color('white')
-        ax.yaxis.label.set_color('white')
-        ax.title.set_color('white')
+        ax.set_facecolor('#313131')
         ax.tick_params(axis='x', colors='white')
         ax.tick_params(axis='y', colors='white')
-        ax.spines['bottom'].set_color('white')
-        ax.spines['top'].set_color('white')
-        ax.spines['left'].set_color('white')
-        ax.spines['right'].set_color('white')
+        for spine in ax.spines.values():
+            spine.set_edgecolor('white')
+
+        for text in ax.get_xticklabels() + ax.get_yticklabels():
+            text.set_color("white")
 
         if self.chart_type_var.get() == "Liniowy":
-            ax.plot(data['timestamp'], data['close'], label=self.symbol_var.get())
+            ax.plot(data['timestamp'], data['close'], color='blue')
+            self.adjust_xaxis_labels(ax, data)
         else:
-            mpf.plot(data.set_index('timestamp'), type='candle', ax=ax, style='charles', show_nontrading=True, warn_too_much_data=100000)
+            mpf.plot(data.set_index('timestamp'),
+                     type='candle',
+                     ax=ax,
+                     style='charles',
+                     show_nontrading=True,
+                     warn_too_much_data=100000)
+            self.adjust_xaxis_labels(fig, ax, data)
 
-        ax.set_xlabel('Data')
-        ax.set_ylabel('Cena zamknięcia')
-        ax.set_title(f'Cena zamknięcia {self.symbol_var.get()}')
-        ax.legend()
-        ax.grid(True)
+        # Draw Fibonacci retracement if checked
+        if self.fib_var.get():
+            self.draw_fibonacci(ax)
 
+        # Draw ZigZag if checked
+        if self.zigzag_var.get():
+            self.draw_zigzag(ax, data)
+
+        # Draw LWMA if checked
+        if self.lwma_var.get():
+            self.draw_lwma(ax, data)
+
+        canvas = FigureCanvasTkAgg(fig, master=self.frame_chart)
+        toolbar = NavigationToolbar2Tk(canvas, self.frame_chart)
+        canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        canvas.draw()
+
+    def adjust_xaxis_labels(self,fig, ax, data):
+        # Determine the time range in the data
+        time_diff = data['timestamp'].iloc[-1] - data['timestamp'].iloc[0]
+        print('asdad')
+
+        if time_diff.days > 365 * 5:  # More than 5 years
+            locator = mdates.YearLocator()
+            formatter = mdates.DateFormatter('%Y')
+        elif time_diff.days > 365:  # More than a year
+            locator = mdates.MonthLocator(bymonthday=(1, 15))
+            formatter = mdates.DateFormatter('%b %Y')
+        elif time_diff.days > 181:  # More than half a year
+            locator = mdates.MonthLocator(bymonthday=(1, 15))
+            formatter = mdates.DateFormatter('%d %b %Y')
+        elif time_diff.days > 31:  # More than a month
+            locator = mdates.WeekdayLocator()
+            formatter = mdates.DateFormatter('%d %b %Y')
+        elif time_diff.days > 14:  # More than two weeks
+            locator = mdates.DayLocator()
+            formatter = mdates.DateFormatter('%d %b')
+        elif time_diff.days > 7:  # More than a week
+            locator = mdates.HourLocator(interval=12)
+            formatter = mdates.DateFormatter('%d %b %H:%M')
+        elif time_diff.days > 3:  # More than three days
+            locator = mdates.HourLocator(interval=6)
+            formatter = mdates.DateFormatter('%d %b %H:%M')
+        elif time_diff.days > 1:  # More than a day
+            locator = mdates.HourLocator()
+            formatter = mdates.DateFormatter('%H:%M')
+        elif time_diff.days > 0.5:  # More than half a day
+            locator = mdates.MinuteLocator(interval=30)
+            formatter = mdates.DateFormatter('%H:%M')
+        elif time_diff.days > 0.25:  # More than six hours
+            locator = mdates.MinuteLocator(interval=15)
+            formatter = mdates.DateFormatter('%H:%M')
+        elif time_diff.seconds > 3600:  # More than an hour
+            locator = mdates.MinuteLocator(interval=5)
+            formatter = mdates.DateFormatter('%H:%M')
+        else:  # Less than an hour
+            locator = mdates.MinuteLocator()
+            formatter = mdates.DateFormatter('%H:%M')
+
+        ax.xaxis.set_major_locator(locator)
+        ax.xaxis.set_major_formatter(formatter)
+        fig.autofmt_xdate()
+
+    def draw_volume(self):
+        data = self.current_display_data
+
+        fig, ax = plt.subplots(figsize=(12, 3))
+        fig.patch.set_facecolor('#313131')
+        ax.set_facecolor('#313131')
+        ax.tick_params(axis='x', colors='white')
+        ax.tick_params(axis='y', colors='white')
+        for spine in ax.spines.values():
+            spine.set_edgecolor('white')
+
+        for text in ax.get_xticklabels() + ax.get_yticklabels():
+            text.set_color("white")
+
+        ax.bar(data['timestamp'], data['volume'], color='gray')
         self.adjust_xaxis_labels(ax, data)
 
-        canvas = FigureCanvasTkAgg(fig, master=container_frame)
+        canvas = FigureCanvasTkAgg(fig, master=self.frame_volume)
+        toolbar = NavigationToolbar2Tk(canvas, self.frame_volume)
+        canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         canvas.draw()
-        canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-
-        toolbar = NavigationToolbar2Tk(canvas, container_frame)
-        toolbar.update()
-        canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-
-        self.display_analyse(data)
 
     def adjust_xaxis_labels(self, ax, data):
         num_days = (data['timestamp'].max() - data['timestamp'].min()).days
@@ -190,15 +303,66 @@ class CryptoApp:
             ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
         else:
             ax.xaxis.set_major_locator(mdates.DayLocator())
-            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M'))
 
         plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
 
-    def display_analyse(self, data):
-        for widget in self.frame_analise.winfo_children():
-            widget.destroy()
+    def draw_fibonacci(self, ax):
+        data = self.current_display_data
+        price_min = data['low'].min()
+        price_max = data['high'].max()
+        diff = price_max - price_min
 
-        columns = ["Time unit", "Price change", "Open price", "Close price", "Prediction 1 algorithm",
+        levels = [price_max - diff * ratio for ratio in [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]]
+
+        for level in levels:
+            ax.axhline(level, linestyle='--', alpha=0.5)
+            ax.text(data['timestamp'].iloc[-1], level, f'{level:.2f}', alpha=0.5, color='red')
+
+    def draw_zigzag(self, ax, data):
+        if len(data) < 2:
+            # Not enough data to perform ZigZag calculation
+            return
+
+        peak_valley = self.peak_valley_pivots(data['close'], 0.02, -0.02)
+        pivots = data.loc[peak_valley != 0]
+        if not pivots.empty:
+            ax.plot(pivots['timestamp'], pivots['close'], color='yellow', label='ZigZag', marker='o', linestyle='-',
+                    markersize=5)
+            ax.legend()
+            self.adjust_xaxis_labels(ax, data)  # Adjust x-axis labels for correct date formatting
+
+    def peak_valley_pivots(self, close, up_thresh, down_thresh):
+        if len(close) < 2:
+            return np.zeros(len(close))  # Return an array of zeros if not enough data
+
+        pivots = np.zeros(len(close))
+        up = down = None
+
+        for i in range(1, len(close)):
+            if up is None or close.iloc[i] >= close.iloc[up]:
+                up = i
+            if down is None or close.iloc[i] <= close.iloc[down]:
+                down = i
+
+            if up is not None and close.iloc[up] - close.iloc[i] > close.iloc[up] * down_thresh:
+                pivots[up] = 1
+                down = up = None
+            elif down is not None and close.iloc[i] - close.iloc[down] > close.iloc[down] * up_thresh:
+                pivots[down] = -1
+                down = up = None
+
+        return pivots
+
+    def draw_lwma(self, ax, data):
+        period = 20  # Example LWMA period
+        weights = np.arange(1, period + 1)
+        lwma = data['close'].rolling(window=period).apply(lambda prices: np.dot(prices, weights) / weights.sum(), raw=True)
+        ax.plot(data['timestamp'], lwma, color='red', label='LWMA')
+        ax.legend()
+
+    def display_analyse(self, data):
+        columns = ["Time unit", "Price change (%)", "Open price", "Close price", "Prediction 1 algorithm",
                    "Prediction 2 algorithm", "Prediction 3 algorithm", "Prediction 4 algorithm",
                    'Average prediction', 'Rows analysed']
 
@@ -212,21 +376,28 @@ class CryptoApp:
 
         time_units = {
             "Rok": 365,
+            "Pół Roku": 182,
             "Miesiąc": 30,
+            "Dwa Tygodnie": 14,
             "Tydzień": 7,
+            "Trzy Dni": 3,
             "Dzień": 1,
-            "Godzina": 1 / 24
+            "12h": 0.5,
+            "6h": 0.25,
+            "30min": 1 / 48,
+            "15min": 1 / 96
         }
 
         for unit, days in time_units.items():
             unit_data = data[data['timestamp'] >= (data['timestamp'].max() - pd.Timedelta(days=days))]
-            price_change = (unit_data['close'].iloc[-1] - unit_data['close'].iloc[0]) / unit_data['close'].iloc[0] * 100
-            avg_prediction = avg_predictions.mean()
-            row = [unit, f"{price_change:.2f}%", unit_data['open'].iloc[0], unit_data['close'].iloc[-1],
-                   predictions["Prediction 1 algorithm"][-1], predictions["Prediction 2 algorithm"][-1],
-                   predictions["Prediction 3 algorithm"][-1], predictions["Prediction 4 algorithm"][-1],
-                   avg_prediction, len(unit_data)]
-            tree.insert("", "end", values=row)
+            if len(unit_data) > 0:
+                price_change = (unit_data['close'].iloc[-1] - unit_data['close'].iloc[0]) / unit_data['close'].iloc[0] * 100
+                avg_prediction = avg_predictions.mean()
+                row = [unit, f"{price_change:.2f}", f"{unit_data['open'].iloc[0]:.2f}", f"{unit_data['close'].iloc[-1]:.2f}",
+                       f"{predictions['Prediction 1 algorithm'][-1]:.2f}", f"{predictions['Prediction 2 algorithm'][-1]:.2f}",
+                       f"{predictions['Prediction 3 algorithm'][-1]:.2f}", f"{predictions['Prediction 4 algorithm'][-1]:.2f}",
+                       f"{avg_prediction:.2f}", len(unit_data)]
+                tree.insert("", "end", values=row)
 
         tree.pack(side="left", fill="both", expand=True)
 
