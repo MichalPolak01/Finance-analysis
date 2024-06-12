@@ -182,11 +182,14 @@ class CryptoApp:
 
         data = self.current_display_data
 
+        print("Drawing chart for data range:")
+        print(data['timestamp'].min(), "to", data['timestamp'].max())
+
         fig, ax = plt.subplots(figsize=(12, 6))
         fig.patch.set_facecolor('#313131')
         ax.set_facecolor('#313131')
         ax.tick_params(axis='x', colors='white')
-        ax.tick_params(axis='y', colors='white')
+        ax.tick_params(axis='y', colors='white')  # Ustawienie koloru etykiet osi Y na biały
         for spine in ax.spines.values():
             spine.set_edgecolor('white')
 
@@ -195,7 +198,6 @@ class CryptoApp:
 
         if self.chart_type_var.get() == "Liniowy":
             ax.plot(data['timestamp'], data['close'], color='blue')
-            self.adjust_xaxis_labels(ax, data)
         else:
             mpf.plot(data.set_index('timestamp'),
                      type='candle',
@@ -203,7 +205,31 @@ class CryptoApp:
                      style='charles',
                      show_nontrading=True,
                      warn_too_much_data=100000)
-            self.adjust_xaxis_labels(fig, ax, data)
+
+        print("Calling adjust_xaxis_labels")
+        self.adjust_xaxis_labels(ax, data)
+
+        print("Adjusting x-axis labels")
+        # Determine the time range in the data
+        time_diff = data['timestamp'].iloc[-1] - data['timestamp'].iloc[0]
+
+        if time_diff.days > 365:
+            ax.xaxis.set_major_locator(mdates.YearLocator())
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+        elif time_diff.days > 30:
+            ax.xaxis.set_major_locator(mdates.MonthLocator())
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        elif time_diff.days > 7:
+            ax.xaxis.set_major_locator(mdates.WeekdayLocator())
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        else:
+            ax.xaxis.set_major_locator(mdates.DayLocator())
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M'))
+
+        plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+
+        # Ustawienie koloru etykiet osi Y na biały
+        ax.tick_params(axis='y', colors='white')
 
         # Draw Fibonacci retracement if checked
         if self.fib_var.get():
@@ -222,51 +248,8 @@ class CryptoApp:
         canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         canvas.draw()
 
-    def adjust_xaxis_labels(self,fig, ax, data):
-        # Determine the time range in the data
-        time_diff = data['timestamp'].iloc[-1] - data['timestamp'].iloc[0]
-        print('asdad')
+        print("Chart drawn.")
 
-        if time_diff.days > 365 * 5:  # More than 5 years
-            locator = mdates.YearLocator()
-            formatter = mdates.DateFormatter('%Y')
-        elif time_diff.days > 365:  # More than a year
-            locator = mdates.MonthLocator(bymonthday=(1, 15))
-            formatter = mdates.DateFormatter('%b %Y')
-        elif time_diff.days > 181:  # More than half a year
-            locator = mdates.MonthLocator(bymonthday=(1, 15))
-            formatter = mdates.DateFormatter('%d %b %Y')
-        elif time_diff.days > 31:  # More than a month
-            locator = mdates.WeekdayLocator()
-            formatter = mdates.DateFormatter('%d %b %Y')
-        elif time_diff.days > 14:  # More than two weeks
-            locator = mdates.DayLocator()
-            formatter = mdates.DateFormatter('%d %b')
-        elif time_diff.days > 7:  # More than a week
-            locator = mdates.HourLocator(interval=12)
-            formatter = mdates.DateFormatter('%d %b %H:%M')
-        elif time_diff.days > 3:  # More than three days
-            locator = mdates.HourLocator(interval=6)
-            formatter = mdates.DateFormatter('%d %b %H:%M')
-        elif time_diff.days > 1:  # More than a day
-            locator = mdates.HourLocator()
-            formatter = mdates.DateFormatter('%H:%M')
-        elif time_diff.days > 0.5:  # More than half a day
-            locator = mdates.MinuteLocator(interval=30)
-            formatter = mdates.DateFormatter('%H:%M')
-        elif time_diff.days > 0.25:  # More than six hours
-            locator = mdates.MinuteLocator(interval=15)
-            formatter = mdates.DateFormatter('%H:%M')
-        elif time_diff.seconds > 3600:  # More than an hour
-            locator = mdates.MinuteLocator(interval=5)
-            formatter = mdates.DateFormatter('%H:%M')
-        else:  # Less than an hour
-            locator = mdates.MinuteLocator()
-            formatter = mdates.DateFormatter('%H:%M')
-
-        ax.xaxis.set_major_locator(locator)
-        ax.xaxis.set_major_formatter(formatter)
-        fig.autofmt_xdate()
 
     def draw_volume(self):
         data = self.current_display_data
@@ -290,20 +273,66 @@ class CryptoApp:
         canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         canvas.draw()
 
+
+        if period == "Rok":
+            start_date = end_date - timedelta(days=365)
+        elif period == "Pół Roku":
+            start_date = end_date - timedelta(days=182)
+        elif period == "Miesiąc":
+            start_date = end_date - timedelta(days=30)
+        elif period == "Dwa Tygodnie":
+            start_date = end_date - timedelta(days=14)
+        elif period == "Tydzień":
+            start_date = end_date - timedelta(days=7)
+        elif period == "Trzy Dni":
+            start_date = end_date - timedelta(days=3)
+        elif period == "Dzień":
+            start_date = end_date - timedelta(days=1)
+        elif period == "12h":
+            start_date = end_date - timedelta(hours=12)
+        elif period == "6h":
+            start_date = end_date - timedelta(hours=6)
+        elif period == "30min":
+            start_date = end_date - timedelta(minutes=30)
+        elif period == "15min":
+            start_date = end_date - timedelta(minutes=15)
+        else:
+            start_date = end_date - timedelta(days=365)
+        data = data[data['timestamp'] >= start_date]
+        self.current_display_data = data
+
     def adjust_xaxis_labels(self, ax, data):
         num_days = (data['timestamp'].max() - data['timestamp'].min()).days
         if num_days > 365:
             ax.xaxis.set_major_locator(mdates.YearLocator())
-            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+        elif num_days > 180:
+            ax.xaxis.set_major_locator(mdates.MonthLocator(bymonthday=(1, 15)))
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%d %b %Y'))
         elif num_days > 30:
-            ax.xaxis.set_major_locator(mdates.MonthLocator())
-            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-        elif num_days > 7:
             ax.xaxis.set_major_locator(mdates.WeekdayLocator())
-            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-        else:
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%d %b %Y'))
+        elif num_days > 7:
             ax.xaxis.set_major_locator(mdates.DayLocator())
-            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M'))
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%d %b'))
+        elif num_days > 3:
+            ax.xaxis.set_major_locator(mdates.HourLocator(interval=6))
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%d %b %H:%M'))
+        elif num_days > 1:
+            ax.xaxis.set_major_locator(mdates.HourLocator(interval=1))
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+        elif num_days > 0.5:
+            ax.xaxis.set_major_locator(mdates.MinuteLocator(interval=30))
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+        elif num_days > 0.25:
+            ax.xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+        elif (data['timestamp'].max() - data['timestamp'].min()).seconds > 3600:
+            ax.xaxis.set_major_locator(mdates.MinuteLocator(interval=5))
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+        else:
+            ax.xaxis.set_major_locator(mdates.MinuteLocator())
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
 
         plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
 
@@ -317,10 +346,10 @@ class CryptoApp:
 
         for level in levels:
             ax.axhline(level, linestyle='--', alpha=0.5)
-            ax.text(data['timestamp'].iloc[-1], level, f'{level:.2f}', alpha=0.5, color='red')
+            ax.text(data['timestamp'].iloc[-1], level, f'{level:.2f}', alpha=0.5, color='green')
 
     def draw_zigzag(self, ax, data):
-        if len(data) < 2:
+        if len(data) < 0:
             # Not enough data to perform ZigZag calculation
             return
 
@@ -355,11 +384,16 @@ class CryptoApp:
         return pivots
 
     def draw_lwma(self, ax, data):
-        period = 20  # Example LWMA period
+        period = 1  # Example LWMA period
+        if len(data) < period:
+            # Not enough data to calculate LWMA
+            return
+
         weights = np.arange(1, period + 1)
         lwma = data['close'].rolling(window=period).apply(lambda prices: np.dot(prices, weights) / weights.sum(), raw=True)
         ax.plot(data['timestamp'], lwma, color='red', label='LWMA')
         ax.legend()
+        self.adjust_xaxis_labels(ax, data)
 
     def display_analyse(self, data):
         columns = ["Time unit", "Price change (%)", "Open price", "Close price", "Prediction 1 algorithm",

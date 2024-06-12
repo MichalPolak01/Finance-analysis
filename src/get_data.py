@@ -62,7 +62,7 @@ def get_crypto_data(symbol, timeframe, start_date, end_date):
     request_params = CryptoBarsRequest(
         symbol_or_symbols=[symbol],
         # timeframe=timeframe.Minute,
-        timeframe=timeframe.Day,
+        timeframe=timeframe.Hour,
         start=start_date,
         end=end_date
     )
