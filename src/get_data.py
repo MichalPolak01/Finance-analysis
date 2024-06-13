@@ -1,30 +1,3 @@
-# import pandas as pd
-# from alpaca.data.requests import CryptoBarsRequest
-# from alpaca.data.historical import CryptoHistoricalDataClient
-# import config
-#
-#
-# def get_crypto_data(symbol, timeframe, start_date, end_date):
-#     # Tworzenie klienta do pobierania danych historycznych
-#     client = CryptoHistoricalDataClient(config.API_KEY, config.SECRET_KEY)
-#
-#     # Tworzenie parametrów zapytania
-#     request_params = CryptoBarsRequest(
-#         symbol_or_symbols=[symbol],
-#         timeframe=timeframe,
-#         start=start_date,
-#         end=end_date
-#     )
-#
-#     # Pobieranie danych
-#     crypto_bars = client.get_crypto_bars(request_params).df
-#
-#     # Resetowanie indeksu, aby kolumna 'timestamp' była oddzielną kolumną
-#     crypto_bars = crypto_bars.reset_index()
-#
-#     return crypto_bars
-
-
 import pandas as pd
 from alpaca.data.requests import CryptoBarsRequest
 from alpaca.data.historical import CryptoHistoricalDataClient
@@ -63,6 +36,7 @@ def get_crypto_data(symbol, timeframe, start_date, end_date):
         symbol_or_symbols=[symbol],
         # timeframe=timeframe.Minute,
         timeframe=timeframe.Hour,
+        # timeframe=timeframe.Day,
         start=start_date,
         end=end_date
     )
@@ -78,6 +52,7 @@ def get_crypto_data(symbol, timeframe, start_date, end_date):
 
     print(crypto_bars)
     return crypto_bars
+
 
 # ETL / Data processing e.g. cleaning
 def clean_data(df):

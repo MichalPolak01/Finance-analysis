@@ -11,6 +11,7 @@ import pandas as pd
 import mplfinance as mpf
 import matplotlib.dates as mdates
 import numpy as np
+import pytz
 
 class CryptoApp:
     def __init__(self, window):
@@ -68,34 +69,37 @@ class CryptoApp:
         self.period_entry.grid(row=1, column=0, padx=15, pady=10, sticky="nsew")
         self.period_entry.bind("<<ComboboxSelected>>", self.update_chart)
 
-        self.chart_type_label = tk.Label(self.option_frame, text="Typ wykresu:")
-        self.chart_type_label.grid(row=2, column=0, padx=20, pady=10)
+        self.chart_type = ttk.LabelFrame(self.option_frame, width=1, text="Chart type")
+        self.chart_type.grid(row=2, column=0, padx=20, pady=10, sticky="nsew")
+        self.chart_type.grid_columnconfigure(0, weight=1)
 
         self.chart_type_var = tk.StringVar()
-        self.chart_type_line = ttk.Checkbutton(self.option_frame, text="Liniowy", variable=self.chart_type_var,
-                                               onvalue="Liniowy", offvalue="")
-        self.chart_type_line.grid(row=3, column=0, padx=15, pady=5, sticky="nsew")
-        self.chart_type_candle = ttk.Checkbutton(self.option_frame, text="Świeczki", variable=self.chart_type_var,
-                                                 onvalue="Świeczki", offvalue="")
-        self.chart_type_candle.grid(row=4, column=0, padx=15, pady=5, sticky="nsew")
+        self.chart_type_line = ttk.Checkbutton(self.chart_type, text="Liniowy", variable=self.chart_type_var, onvalue="Liniowy", offvalue="")
+        self.chart_type_line.grid(row=0, column=0, padx=15, pady=5, sticky="nsew")
+        self.chart_type_candle = ttk.Checkbutton(self.chart_type, text="Świeczki", variable=self.chart_type_var, onvalue="Świeczki", offvalue="")
+        self.chart_type_candle.grid(row=1, column=0, padx=15, pady=5, sticky="nsew")
         self.chart_type_line.invoke()  # Set default to line chart
         self.chart_type_var.trace_add('write', self.update_chart)
 
+        self.extra_options = ttk.LabelFrame(self.option_frame, width=1, text="Extra options")
+        self.extra_options.grid(row=3, column=0, padx=20, pady=10, sticky="nsew")
+        self.extra_options.grid_columnconfigure(0, weight=1)
+
         self.fib_var = tk.BooleanVar()
-        self.fib_check = ttk.Checkbutton(self.option_frame, text="Rysuj Fibonacci", variable=self.fib_var, command=self.update_chart)
-        self.fib_check.grid(row=5, column=0, padx=15, pady=5, sticky="nsew")
+        self.fib_check = ttk.Checkbutton(self.extra_options, text="Rysuj Fibonacci", variable=self.fib_var, command=self.update_chart)
+        self.fib_check.grid(row=0, column=0, padx=15, pady=5, sticky="nsew")
 
         self.zigzag_var = tk.BooleanVar()
-        self.zigzag_check = ttk.Checkbutton(self.option_frame, text="Rysuj ZigZag", variable=self.zigzag_var, command=self.update_chart)
-        self.zigzag_check.grid(row=6, column=0, padx=15, pady=5, sticky="nsew")
+        self.zigzag_check = ttk.Checkbutton(self.extra_options, text="Rysuj ZigZag", variable=self.zigzag_var, command=self.update_chart)
+        self.zigzag_check.grid(row=1, column=0, padx=15, pady=5, sticky="nsew")
 
         self.lwma_var = tk.BooleanVar()
-        self.lwma_check = ttk.Checkbutton(self.option_frame, text="Rysuj LWMA", variable=self.lwma_var, command=self.update_chart)
-        self.lwma_check.grid(row=7, column=0, padx=15, pady=5, sticky="nsew")
+        self.lwma_check = ttk.Checkbutton(self.extra_options, text="Rysuj LWMA", variable=self.lwma_var, command=self.update_chart)
+        self.lwma_check.grid(row=2, column=0, padx=15, pady=5, sticky="nsew")
 
         self.volume_var = tk.BooleanVar()
-        self.volume_check = ttk.Checkbutton(self.option_frame, text="Pokaż wolumen", variable=self.volume_var, command=self.update_chart)
-        self.volume_check.grid(row=8, column=0, padx=15, pady=5, sticky="nsew")
+        self.volume_check = ttk.Checkbutton(self.extra_options, text="Pokaż wolumen", variable=self.volume_var, command=self.update_chart)
+        self.volume_check.grid(row=3, column=0, padx=15, pady=5, sticky="nsew")
 
         self.frame2 = ttk.Frame(self.window, height=self.window.winfo_height(), style="Green.TFrame")
         self.frame2.grid(row=0, column=1, sticky=tk.NSEW)
@@ -120,14 +124,24 @@ class CryptoApp:
         if symbol in self.current_symbol_data:
             self.update_chart()
             return
-        end_date = datetime.now().replace(tzinfo=None)
+
+        end_date = datetime.now(pytz.timezone('Europe/Warsaw'))
         start_date = end_date - timedelta(days=365)
-        start_date_str = start_date.strftime('%Y-%m-%d')
-        end_date_str = end_date.strftime('%Y-%m-%d')
+        start_date_str = start_date.strftime('%Y-%m-%d %H:%M:%S')
+        end_date_str = end_date.strftime('%Y-%m-%d %H:%M:%S')
         timeframe = TimeFrame.Hour
 
         data = get_crypto_data(symbol, timeframe, start_date_str, end_date_str)
-        data['timestamp'] = pd.to_datetime(data['timestamp']).dt.tz_localize(None)  # Convert to timezone-naive
+        data['timestamp'] = pd.to_datetime(data['timestamp'])
+
+        # Check if timestamps are tz-aware and convert only if they are
+        if data['timestamp'].dt.tz is None:
+            data['timestamp'] = data['timestamp'].dt.tz_localize('UTC').dt.tz_convert('Europe/Warsaw')
+        else:
+            data['timestamp'] = data['timestamp'].dt.tz_convert('Europe/Warsaw')
+
+        data['timestamp'] = data['timestamp'].dt.tz_localize(None)  # Remove timezone information
+
         self.current_symbol_data[symbol] = data
         self.update_chart()
 
@@ -182,14 +196,11 @@ class CryptoApp:
 
         data = self.current_display_data
 
-        print("Drawing chart for data range:")
-        print(data['timestamp'].min(), "to", data['timestamp'].max())
-
         fig, ax = plt.subplots(figsize=(12, 6))
         fig.patch.set_facecolor('#313131')
         ax.set_facecolor('#313131')
         ax.tick_params(axis='x', colors='white')
-        ax.tick_params(axis='y', colors='white')  # Ustawienie koloru etykiet osi Y na biały
+        ax.tick_params(axis='y', colors='white')
         for spine in ax.spines.values():
             spine.set_edgecolor('white')
 
@@ -206,30 +217,50 @@ class CryptoApp:
                      show_nontrading=True,
                      warn_too_much_data=100000)
 
-        print("Calling adjust_xaxis_labels")
-        self.adjust_xaxis_labels(ax, data)
-
-        print("Adjusting x-axis labels")
         # Determine the time range in the data
         time_diff = data['timestamp'].iloc[-1] - data['timestamp'].iloc[0]
+        total_seconds = time_diff.total_seconds()
 
-        if time_diff.days > 365:
-            ax.xaxis.set_major_locator(mdates.YearLocator())
-            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-        elif time_diff.days > 30:
-            ax.xaxis.set_major_locator(mdates.MonthLocator())
-            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-        elif time_diff.days > 7:
-            ax.xaxis.set_major_locator(mdates.WeekdayLocator())
-            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-        else:
-            ax.xaxis.set_major_locator(mdates.DayLocator())
-            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M'))
+        if total_seconds > 365 * 24 * 3600 * 5:  # More than 5 years
+            locator = mdates.YearLocator()
+            formatter = mdates.DateFormatter('%Y')
+        elif total_seconds > 365 * 24 * 3600:  # More than a year
+            locator = mdates.MonthLocator()
+            formatter = mdates.DateFormatter('%b %Y')
+        elif total_seconds > 180 * 24 * 3600:  # More than half a year
+            locator = mdates.MonthLocator(bymonthday=(1, 15))
+            formatter = mdates.DateFormatter('%d %b %Y')
+        elif total_seconds > 30 * 24 * 3600:  # More than a month
+            locator = mdates.WeekdayLocator()
+            formatter = mdates.DateFormatter('%d %b %Y')
+        elif total_seconds > 14 * 24 * 3600:  # More than two weeks
+            locator = mdates.DayLocator()
+            formatter = mdates.DateFormatter('%d %b')
+        elif total_seconds > 7 * 24 * 3600:  # More than a week
+            locator = mdates.HourLocator(interval=12)
+            formatter = mdates.DateFormatter('%d %b %H:%M')
+        elif total_seconds > 3 * 24 * 3600:  # More than three days
+            locator = mdates.HourLocator(interval=6)
+            formatter = mdates.DateFormatter('%d %b %H:%M')
+        elif total_seconds > 24 * 3600:  # More than a day
+            locator = mdates.HourLocator(interval=3)
+            formatter = mdates.DateFormatter('%d %b %H:%M')
+        elif total_seconds > 12 * 3600:  # More than half a day
+            locator = mdates.HourLocator()
+            formatter = mdates.DateFormatter('%d %b %H:%M')
+        elif total_seconds > 6 * 3600:  # More than six hours
+            locator = mdates.MinuteLocator(interval=30)
+            formatter = mdates.DateFormatter('%d %b %H:%M')
+        elif total_seconds > 3600:  # More than an hour
+            locator = mdates.MinuteLocator(interval=15)
+            formatter = mdates.DateFormatter('%d %b %H:%M')
+        else:  # Less than an hour
+            locator = mdates.MinuteLocator()
+            formatter = mdates.DateFormatter('%d %b %H:%M')
 
-        plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
-
-        # Ustawienie koloru etykiet osi Y na biały
-        ax.tick_params(axis='y', colors='white')
+        ax.xaxis.set_major_locator(locator)
+        ax.xaxis.set_major_formatter(formatter)
+        ax.figure.autofmt_xdate()
 
         # Draw Fibonacci retracement if checked
         if self.fib_var.get():
@@ -247,9 +278,6 @@ class CryptoApp:
         toolbar = NavigationToolbar2Tk(canvas, self.frame_chart)
         canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         canvas.draw()
-
-        print("Chart drawn.")
-
 
     def draw_volume(self):
         data = self.current_display_data
@@ -272,34 +300,6 @@ class CryptoApp:
         toolbar = NavigationToolbar2Tk(canvas, self.frame_volume)
         canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         canvas.draw()
-
-
-        if period == "Rok":
-            start_date = end_date - timedelta(days=365)
-        elif period == "Pół Roku":
-            start_date = end_date - timedelta(days=182)
-        elif period == "Miesiąc":
-            start_date = end_date - timedelta(days=30)
-        elif period == "Dwa Tygodnie":
-            start_date = end_date - timedelta(days=14)
-        elif period == "Tydzień":
-            start_date = end_date - timedelta(days=7)
-        elif period == "Trzy Dni":
-            start_date = end_date - timedelta(days=3)
-        elif period == "Dzień":
-            start_date = end_date - timedelta(days=1)
-        elif period == "12h":
-            start_date = end_date - timedelta(hours=12)
-        elif period == "6h":
-            start_date = end_date - timedelta(hours=6)
-        elif period == "30min":
-            start_date = end_date - timedelta(minutes=30)
-        elif period == "15min":
-            start_date = end_date - timedelta(minutes=15)
-        else:
-            start_date = end_date - timedelta(days=365)
-        data = data[data['timestamp'] >= start_date]
-        self.current_display_data = data
 
     def adjust_xaxis_labels(self, ax, data):
         num_days = (data['timestamp'].max() - data['timestamp'].min()).days
@@ -359,7 +359,6 @@ class CryptoApp:
             ax.plot(pivots['timestamp'], pivots['close'], color='yellow', label='ZigZag', marker='o', linestyle='-',
                     markersize=5)
             ax.legend()
-            self.adjust_xaxis_labels(ax, data)  # Adjust x-axis labels for correct date formatting
 
     def peak_valley_pivots(self, close, up_thresh, down_thresh):
         if len(close) < 2:
@@ -393,7 +392,6 @@ class CryptoApp:
         lwma = data['close'].rolling(window=period).apply(lambda prices: np.dot(prices, weights) / weights.sum(), raw=True)
         ax.plot(data['timestamp'], lwma, color='red', label='LWMA')
         ax.legend()
-        self.adjust_xaxis_labels(ax, data)
 
     def display_analyse(self, data):
         columns = ["Time unit", "Price change (%)", "Open price", "Close price", "Prediction 1 algorithm",
