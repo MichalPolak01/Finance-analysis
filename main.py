@@ -1,17 +1,19 @@
 import os
 import tkinter as tk
 from tkinter import ttk
-from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 from alpaca.data.timeframe import TimeFrame
+from statsmodels.tsa.ar_model import AutoReg
 from src.get_data import get_crypto_data
 import pandas as pd
 import mplfinance as mpf
 import matplotlib.dates as mdates
 import numpy as np
 import pytz
+from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.tsa.statespace.sarimax import SARIMAX
 
 class CryptoApp:
     def __init__(self, window):
@@ -49,8 +51,9 @@ class CryptoApp:
         self.symbol_list_label.grid(row=0, column=0, padx=15, pady=5, sticky="nsew")
 
         self.symbol_var = tk.StringVar()
+        self.old_symbol_var = tk.StringVar()
         self.symbol_entry = ttk.Combobox(self.widgets_frame, textvariable=self.symbol_var)
-        self.symbol_entry['values'] = ["BTC/USD", "ETH/USD", "LTC/USD"]
+        self.symbol_entry['values'] = ["BTC/USD", "ETH/USD", "LTC/USD", "BCH/USD", "DOT/USD", "LINK/USD", "DOGE/USD", "UNI/USD", "AAVE/USD"]
         self.symbol_entry.current(0)
         self.symbol_entry.grid(row=0, column=1, padx=15, pady=10, sticky="nsew")
         self.symbol_entry.bind("<<ComboboxSelected>>", self.load_data)
@@ -59,18 +62,19 @@ class CryptoApp:
         self.option_frame.grid(row=1, column=0, padx=20, pady=10, sticky="nsew")
         self.option_frame.grid_columnconfigure(0, weight=1)
 
-        self.period_label = tk.Label(self.option_frame, text="Okres:")
-        self.period_label.grid(row=0, column=0, padx=20, pady=10)
+        self.period_frame = ttk.LabelFrame(self.option_frame, width=1, text="Period")
+        self.period_frame.grid(row=0, column=0, padx=20, pady=10, sticky="nsew")
+        self.period_frame.grid_columnconfigure(0, weight=1)
 
         self.period_var = tk.StringVar()
-        self.period_entry = ttk.Combobox(self.option_frame, textvariable=self.period_var)
-        self.period_entry['values'] = ["Rok", "Pół Roku", "Miesiąc", "Dwa Tygodnie", "Tydzień", "Trzy Dni", "Dzień", "12h", "6h", "30min", "15min"]
+        self.period_entry = ttk.Combobox(self.period_frame, textvariable=self.period_var)
+        self.period_entry['values'] = ["Rok", "Pół Roku", "Miesiąc", "Dwa Tygodnie", "Tydzień", "Trzy Dni", "Dzień", "12h", "6h"]
         self.period_entry.current(0)
-        self.period_entry.grid(row=1, column=0, padx=15, pady=10, sticky="nsew")
+        self.period_entry.grid(row=0, column=0, padx=15, pady=10, sticky="nsew")
         self.period_entry.bind("<<ComboboxSelected>>", self.update_chart)
 
         self.chart_type = ttk.LabelFrame(self.option_frame, width=1, text="Chart type")
-        self.chart_type.grid(row=2, column=0, padx=20, pady=10, sticky="nsew")
+        self.chart_type.grid(row=1, column=0, padx=20, pady=10, sticky="nsew")
         self.chart_type.grid_columnconfigure(0, weight=1)
 
         self.chart_type_var = tk.StringVar()
@@ -82,7 +86,7 @@ class CryptoApp:
         self.chart_type_var.trace_add('write', self.update_chart)
 
         self.extra_options = ttk.LabelFrame(self.option_frame, width=1, text="Extra options")
-        self.extra_options.grid(row=3, column=0, padx=20, pady=10, sticky="nsew")
+        self.extra_options.grid(row=2, column=0, padx=20, pady=10, sticky="nsew")
         self.extra_options.grid_columnconfigure(0, weight=1)
 
         self.fib_var = tk.BooleanVar()
@@ -98,8 +102,8 @@ class CryptoApp:
         self.lwma_check.grid(row=2, column=0, padx=15, pady=5, sticky="nsew")
 
         self.volume_var = tk.BooleanVar()
-        self.volume_check = ttk.Checkbutton(self.extra_options, text="Pokaż wolumen", variable=self.volume_var, command=self.update_chart)
-        self.volume_check.grid(row=3, column=0, padx=15, pady=5, sticky="nsew")
+        # self.volume_check = ttk.Checkbutton(self.extra_options, text="Pokaż wolumen", variable=self.volume_var, command=self.update_chart)
+        # self.volume_check.grid(row=3, column=0, padx=15, pady=5, sticky="nsew")
 
         self.frame2 = ttk.Frame(self.window, height=self.window.winfo_height(), style="Green.TFrame")
         self.frame2.grid(row=0, column=1, sticky=tk.NSEW)
@@ -108,10 +112,10 @@ class CryptoApp:
         self.frame_chart = ttk.Frame(self.frame2, style="TNotebook", padding=10)
         self.frame_chart.grid(row=0, column=0, sticky=tk.NSEW)
         self.frame_chart.grid_propagate(False)
-        self.frame2.grid_rowconfigure(1, weight=1)
-        self.frame_volume = ttk.Frame(self.frame2, style="TNotebook", padding=10)
-        self.frame_volume.grid(row=1, column=0, sticky=tk.NSEW)
-        self.frame_volume.grid_propagate(False)
+        # self.frame2.grid_rowconfigure(1, weight=1)
+        # self.frame_volume = ttk.Frame(self.frame2, style="TNotebook", padding=10)
+        # self.frame_volume.grid(row=1, column=0, sticky=tk.NSEW)
+        # self.frame_volume.grid_propagate(False)
         self.frame2.grid_rowconfigure(2, weight=2)
         self.frame_analise = ttk.Frame(self.frame2, style="TNotebook", padding=10)
         self.frame_analise.grid(row=2, column=0, sticky=tk.NSEW)
@@ -142,6 +146,7 @@ class CryptoApp:
 
         data['timestamp'] = data['timestamp'].dt.tz_localize(None)  # Remove timezone information
 
+        self.old_symbol_var = tk.StringVar()
         self.current_symbol_data[symbol] = data
         self.update_chart()
 
@@ -181,15 +186,15 @@ class CryptoApp:
         # Clear previous charts
         for widget in self.frame_chart.winfo_children():
             widget.destroy()
-        for widget in self.frame_volume.winfo_children():
-            widget.destroy()
-        for widget in self.frame_analise.winfo_children():
-            widget.destroy()
+        # for widget in self.frame_volume.winfo_children():
+        #     widget.destroy()
 
         self.draw_chart()
-        if self.volume_var.get():
-            self.draw_volume()
-        self.display_analyse(data)
+        # if self.volume_var.get():
+        #     self.draw_volume()
+        if self.old_symbol_var.get() != self.symbol_var.get():
+            self.display_analyse(data)
+            self.old_symbol_var = self.symbol_var
 
     def draw_chart(self):
         plt.close('all')  # Zamknij wszystkie otwarte figury
@@ -207,6 +212,13 @@ class CryptoApp:
         for text in ax.get_xticklabels() + ax.get_yticklabels():
             text.set_color("white")
 
+        # Zmiana koloru etykiet osi
+        ax.xaxis.label.set_color('white')
+        ax.yaxis.label.set_color('white')
+
+        # Zmiana koloru tytułu
+        ax.title.set_color('white')
+
         if self.chart_type_var.get() == "Liniowy":
             ax.plot(data['timestamp'], data['close'], color='blue')
         else:
@@ -216,6 +228,8 @@ class CryptoApp:
                      style='charles',
                      show_nontrading=True,
                      warn_too_much_data=100000)
+
+        ax.title.set_text(self.symbol_var.get())
 
         # Determine the time range in the data
         time_diff = data['timestamp'].iloc[-1] - data['timestamp'].iloc[0]
@@ -294,7 +308,50 @@ class CryptoApp:
             text.set_color("white")
 
         ax.bar(data['timestamp'], data['volume'], color='gray')
-        self.adjust_xaxis_labels(ax, data)
+
+        # Determine the time range in the data
+        time_diff = data['timestamp'].iloc[-1] - data['timestamp'].iloc[0]
+
+        if time_diff.days > 365 * 5:  # More than 5 years
+            locator = mdates.YearLocator()
+            formatter = mdates.DateFormatter('%Y')
+        elif time_diff.days > 365:  # More than a year
+            locator = mdates.MonthLocator()
+            formatter = mdates.DateFormatter('%b %Y')
+        elif time_diff.days > 180:  # More than half a year
+            locator = mdates.MonthLocator(bymonthday=(1, 15))
+            formatter = mdates.DateFormatter('%d %b %Y')
+        elif time_diff.days > 30:  # More than a month
+            locator = mdates.WeekdayLocator()
+            formatter = mdates.DateFormatter('%d %b %Y')
+        elif time_diff.days > 14:  # More than two weeks
+            locator = mdates.DayLocator()
+            formatter = mdates.DateFormatter('%d %b')
+        elif time_diff.days > 7:  # More than a week
+            locator = mdates.HourLocator(interval=12)
+            formatter = mdates.DateFormatter('%d %b %H:%M')
+        elif time_diff.days > 3:  # More than three days
+            locator = mdates.HourLocator(interval=6)
+            formatter = mdates.DateFormatter('%d %b %H:%M')
+        elif time_diff.days > 1:  # More than a day
+            locator = mdates.HourLocator()
+            formatter = mdates.DateFormatter('%H:%M')
+        elif time_diff.days > 0.5:  # More than half a day
+            locator = mdates.MinuteLocator(interval=30)
+            formatter = mdates.DateFormatter('%H:%M')
+        elif time_diff.days > 0.25:  # More than six hours
+            locator = mdates.MinuteLocator(interval=15)
+            formatter = mdates.DateFormatter('%H:%M')
+        elif time_diff.seconds > 3600:  # More than an hour
+            locator = mdates.MinuteLocator(interval=5)
+            formatter = mdates.DateFormatter('%H:%M')
+        else:  # Less than an hour
+            locator = mdates.MinuteLocator()
+            formatter = mdates.DateFormatter('%d %b %H:%M')
+
+        ax.xaxis.set_major_locator(locator)
+        ax.xaxis.set_major_formatter(formatter)
+        ax.figure.autofmt_xdate()
 
         canvas = FigureCanvasTkAgg(fig, master=self.frame_volume)
         toolbar = NavigationToolbar2Tk(canvas, self.frame_volume)
@@ -346,7 +403,7 @@ class CryptoApp:
 
         for level in levels:
             ax.axhline(level, linestyle='--', alpha=0.5)
-            ax.text(data['timestamp'].iloc[-1], level, f'{level:.2f}', alpha=0.5, color='green')
+            ax.text(data['timestamp'].iloc[-1], level, f'{level:.2f}', alpha=0.5, color='pink')
 
     def draw_zigzag(self, ax, data):
         if len(data) < 0:
@@ -394,9 +451,11 @@ class CryptoApp:
         ax.legend()
 
     def display_analyse(self, data):
-        columns = ["Time unit", "Price change (%)", "Open price", "Close price", "Prediction 1 algorithm",
-                   "Prediction 2 algorithm", "Prediction 3 algorithm", "Prediction 4 algorithm",
-                   'Average prediction', 'Rows analysed']
+        for widget in self.frame_analise.winfo_children():
+            widget.destroy()
+
+        columns = ["Time unit", "Price change (%)", "Open price", "Close price", "Prediction SARIMA algorithm",
+                   "Prediction ARTIMA algorithm", "Prediction AutoReg algorithm", 'Rows analysed']
 
         tree = ttk.Treeview(self.frame_analise, columns=columns, show="headings")
         for col in columns:
@@ -416,8 +475,6 @@ class CryptoApp:
             "Dzień": 1,
             "12h": 0.5,
             "6h": 0.25,
-            "30min": 1 / 48,
-            "15min": 1 / 96
         }
 
         for unit, days in time_units.items():
@@ -425,22 +482,56 @@ class CryptoApp:
             if len(unit_data) > 0:
                 price_change = (unit_data['close'].iloc[-1] - unit_data['close'].iloc[0]) / unit_data['close'].iloc[0] * 100
                 avg_prediction = avg_predictions.mean()
+
+                # Wywołanie predykcji dla danej jednostki czasu
+                predictions = self.make_predictions(unit_data)
+
                 row = [unit, f"{price_change:.2f}", f"{unit_data['open'].iloc[0]:.2f}", f"{unit_data['close'].iloc[-1]:.2f}",
-                       f"{predictions['Prediction 1 algorithm'][-1]:.2f}", f"{predictions['Prediction 2 algorithm'][-1]:.2f}",
-                       f"{predictions['Prediction 3 algorithm'][-1]:.2f}", f"{predictions['Prediction 4 algorithm'][-1]:.2f}",
-                       f"{avg_prediction:.2f}", len(unit_data)]
+                       f"{predictions['Prediction ARTIMA algorithm'][-1]:.2f}", f"{predictions['Prediction SARIMA algorithm'][-1]:.2f}",
+                       f"{predictions['Prediction AutoReg algorithm'][-1]:.2f}", len(unit_data)]
                 tree.insert("", "end", values=row)
 
         tree.pack(side="left", fill="both", expand=True)
 
-    @staticmethod
-    def make_predictions(data):
-        return {
-            "Prediction 1 algorithm": [data['close'].mean()] * len(data),
-            "Prediction 2 algorithm": [data['close'].mean()] * len(data),
-            "Prediction 3 algorithm": [data['close'].mean()] * len(data),
-            "Prediction 4 algorithm": [data['close'].mean()] * len(data)
+    def make_predictions(self, data):
+        predictions = {
+            "Prediction SARIMA algorithm": self.prediction1(data),
+            "Prediction ARTIMA algorithm": self.prediction2(data),
+            "Prediction AutoReg algorithm": self.prediction3(data),
         }
+        return predictions
+
+    def prediction1(self, data):
+        # Zakładamy, że 'close' jest kolumną do przewidywania
+        train_data = data['close']
+        model = ARIMA(train_data, order=(5, 1, 0))
+        results = model.fit()
+        predictions = results.forecast(steps=len(data))
+        return predictions.tolist()
+
+    def prediction2(self, data):
+        train_data = data['close']
+        model = SARIMAX(train_data, order=(1, 1, 1), seasonal_order=(1, 1, 1, 12))
+        results = model.fit()
+        predictions = results.forecast(steps=len(data))
+        return predictions.tolist()
+
+    def prediction3(self, data):
+        train_data = data['close'].values  # Convert to numpy array for consistency
+        if len(train_data) < 6:  # Minimum data points needed for lags=5
+            # Use simple mean if data is insufficient for AutoReg
+            return [np.mean(train_data)] * len(data)
+
+        try:
+            model = AutoReg(train_data, lags=5)
+            results = model.fit()
+            predictions = results.predict(start=len(train_data), end=len(train_data) + len(data) - 1, dynamic=False)
+            return predictions.tolist()
+        except ValueError:
+            # Handle the case where AutoReg cannot be estimated
+            # Use simple mean if model cannot be estimated
+            return [np.mean(train_data)] * len(data)
+
 
 if __name__ == "__main__":
     window = tk.Tk()
