@@ -150,6 +150,7 @@ class CryptoApp:
         self.current_symbol_data[symbol] = data
         self.update_chart()
 
+
     def update_chart(self, *args):
         symbol = self.symbol_var.get()
         period = self.period_var.get()
@@ -180,8 +181,8 @@ class CryptoApp:
             start_date = end_date - timedelta(minutes=15)
         else:
             start_date = end_date - timedelta(days=365)
-        data = data[data['timestamp'] >= start_date]
-        self.current_display_data = data
+        current_data = data[data['timestamp'] >= start_date]
+        self.current_display_data = current_data
 
         # Clear previous charts
         for widget in self.frame_chart.winfo_children():
@@ -413,8 +414,7 @@ class CryptoApp:
         peak_valley = self.peak_valley_pivots(data['close'], 0.02, -0.02)
         pivots = data.loc[peak_valley != 0]
         if not pivots.empty:
-            ax.plot(pivots['timestamp'], pivots['close'], color='yellow', label='ZigZag', marker='o', linestyle='-',
-                    markersize=5)
+            ax.plot(pivots['timestamp'], pivots['close'], color='yellow', label='ZigZag', marker='o', linestyle='-', markersize=5)
             ax.legend()
 
     def peak_valley_pivots(self, close, up_thresh, down_thresh):
@@ -454,8 +454,8 @@ class CryptoApp:
         for widget in self.frame_analise.winfo_children():
             widget.destroy()
 
-        columns = ["Time unit", "Price change (%)", "Open price", "Close price", "Prediction SARIMA algorithm",
-                   "Prediction ARTIMA algorithm", "Prediction AutoReg algorithm", 'Rows analysed']
+        columns = ["Time unit", "Price change (%)", "Open price", "Close price", "Prediction ARIMA algorithm",
+                   "Prediction SARIMAX algorithm", "Prediction AutoReg algorithm", 'Rows analysed']
 
         tree = ttk.Treeview(self.frame_analise, columns=columns, show="headings")
         for col in columns:
@@ -487,7 +487,7 @@ class CryptoApp:
                 predictions = self.make_predictions(unit_data)
 
                 row = [unit, f"{price_change:.2f}", f"{unit_data['open'].iloc[0]:.2f}", f"{unit_data['close'].iloc[-1]:.2f}",
-                       f"{predictions['Prediction ARTIMA algorithm'][-1]:.2f}", f"{predictions['Prediction SARIMA algorithm'][-1]:.2f}",
+                       f"{predictions['Prediction ARIMA algorithm'][-1]:.2f}", f"{predictions['Prediction SARIMAX algorithm'][-1]:.2f}",
                        f"{predictions['Prediction AutoReg algorithm'][-1]:.2f}", len(unit_data)]
                 tree.insert("", "end", values=row)
 
@@ -495,8 +495,8 @@ class CryptoApp:
 
     def make_predictions(self, data):
         predictions = {
-            "Prediction SARIMA algorithm": self.prediction1(data),
-            "Prediction ARTIMA algorithm": self.prediction2(data),
+            "Prediction ARIMA algorithm": self.prediction1(data),
+            "Prediction SARIMAX algorithm": self.prediction2(data),
             "Prediction AutoReg algorithm": self.prediction3(data),
         }
         return predictions
