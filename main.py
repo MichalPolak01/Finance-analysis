@@ -14,6 +14,9 @@ import numpy as np
 import pytz
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.statespace.sarimax import SARIMAX
+from sklearn.metrics import mean_squared_error, mean_absolute_error
+from sklearn.model_selection import train_test_split
+
 
 class CryptoApp:
     def __init__(self, window):
@@ -493,6 +496,11 @@ class CryptoApp:
 
         tree.pack(side="left", fill="both", expand=True)
 
+        self.prediction1_test(data)
+        self.prediction1_test_shuffle(data)
+        self.prediction3_test(data)
+        self.prediction3_test_shuffle(data)
+
     def make_predictions(self, data):
         predictions = {
             "Prediction ARIMA algorithm": self.prediction1(data),
@@ -531,6 +539,87 @@ class CryptoApp:
             # Handle the case where AutoReg cannot be estimated
             # Use simple mean if model cannot be estimated
             return [np.mean(train_data)] * len(data)
+
+
+    def prediction1_test(self, data):
+        print('\nPrediction ARIMA algorithm for ', self.symbol_var.get())
+        train_size = int(len(data) * 0.7)
+        train_data = data['close'].iloc[:train_size]
+        test_data = data['close'].iloc[train_size:]
+
+        model = ARIMA(train_data, order=(5, 1, 0))
+        results = model.fit()
+
+        predictions = results.forecast(steps=len(test_data))
+
+        mse = mean_squared_error(test_data, predictions)
+        mae = mean_absolute_error(test_data, predictions)
+        rmse = np.sqrt(mse)
+
+        print(f"Mean Squared Error (MSE): {mse}")
+        print(f"Mean Absolute Error (MAE): {mae}")
+        print(f"Root Mean Squared Error (RMSE): {rmse}")
+
+    def prediction1_test_shuffle(self, data):
+        print('\nShuffle Prediction ARIMA algorithm for ', self.symbol_var.get())
+
+        train_data, test_data = train_test_split(data['close'], test_size=0.3, shuffle=True, random_state=42)
+
+        train_data = train_data.reset_index(drop=True)
+        test_data = test_data.reset_index(drop=True)
+
+        model = ARIMA(train_data, order=(2, 1, 0))
+        results = model.fit()
+
+        predictions = results.forecast(steps=len(test_data))
+
+        mse = mean_squared_error(test_data, predictions)
+        mae = mean_absolute_error(test_data, predictions)
+        rmse = np.sqrt(mse)
+
+        print(f"Mean Squared Error (MSE): {mse}")
+        print(f"Mean Absolute Error (MAE): {mae}")
+        print(f"Root Mean Squared Error (RMSE): {rmse}")
+
+    def prediction3_test(self, data):
+        print('\nPrediction AutoReg algorithm for ', self.symbol_var.get())
+        train_size = int(len(data) * 0.7)
+        train_data = data['close'].iloc[:train_size].values
+        test_data = data['close'].iloc[train_size:]
+
+        model = AutoReg(train_data, lags=5)
+        results = model.fit()
+
+        predictions = results.predict(start=len(train_data), end=len(train_data) + len(test_data) - 1, dynamic=False)
+
+        mse = mean_squared_error(test_data, predictions)
+        mae = mean_absolute_error(test_data, predictions)
+        rmse = np.sqrt(mse)
+
+        print(f"Mean Squared Error (MSE): {mse}")
+        print(f"Mean Absolute Error (MAE): {mae}")
+        print(f"Root Mean Squared Error (RMSE): {rmse}")
+
+        return predictions.tolist()
+
+    def prediction3_test_shuffle(self, data):
+        print('\nShuffle Prediction AutoReg algorithm for ', self.symbol_var.get())
+
+        train_data, test_data = train_test_split(data['close'], test_size=0.3, shuffle=True, random_state=42)
+        train_data = train_data.values
+
+        model = AutoReg(train_data, lags=5)
+        results = model.fit()
+
+        predictions = results.predict(start=len(train_data), end=len(train_data) + len(test_data) - 1, dynamic=False)
+
+        mse = mean_squared_error(test_data, predictions)
+        mae = mean_absolute_error(test_data, predictions)
+        rmse = np.sqrt(mse)
+
+        print(f"Mean Squared Error (MSE): {mse}")
+        print(f"Mean Absolute Error (MAE): {mae}")
+        print(f"Root Mean Squared Error (RMSE): {rmse}")
 
 
 if __name__ == "__main__":
